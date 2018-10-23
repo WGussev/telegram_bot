@@ -3,8 +3,8 @@ import functools
 import datetime
 import json
 import re
-from Scraper import Scraper
-from Analyzer import Analyzer
+from scraper import Scraper
+from analyzer import Analyzer
 
 
 def logger(func):
@@ -77,6 +77,7 @@ class Bot:
                   'timeout': timeout}
         if offset:
             params['offset'] = offset
+            print(params)
         upd = Upd(rq.get(self.assemble_url(method_name), params).json())
         print(upd)
         return upd
@@ -97,16 +98,22 @@ class Bot:
         file = rq.get(self.assemble_url(method_name), params)
 
 
-
 def main():
-    token = #add token here
+
+    with open('token.token', 'r') as f:
+        token = f.read().strip('\n')
+
     home_bot = Bot(token)
+    print(token)
+
+
     offset = None
 
     while True:
         try:
             last_upd = home_bot.get_last_update(offset)
             if last_upd:
+                print("OK")
                 offset = last_upd.get_offset() + 1
                 msg_text = last_upd.get_text()
 
