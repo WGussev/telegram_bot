@@ -2,27 +2,28 @@ import requests as rq
 import functools
 import datetime
 import json
-import re
-from scraper import Scraper
-from analyzer import Analyzer
-
+import os
 
 def logger(func):
-    
+    """
+        opens/creates log.log file to store function log:
+        enter/exit time, exceptions, if any occured
+    """
     @functools.wraps(func)
     def wrapped(*args, **kwargs):
-        with open('log.log', 'a') as f:
+        with open('../log.log', 'a') as f:
+            # enter-log
             f.write(str(datetime.datetime.now()) +
                     ' entering: ' +
                     str(func.__name__) +
                     ' from ' + str(func.__module__) + '\n')
-            # how can I extract classname for a method?
             try:
-                print('!  ', func.__name__)
                 result = func(*args, **kwargs)
+            # exception-log
             except Exception as exp:
                 f.write('! an EXCEPTION occurred: ' + str(exp) + '\n')
-                result=None
+                result = None
+            # exit-log
             f.write('exiting: ' + str(func.__name__)+'\n')
         return result
 
@@ -31,9 +32,14 @@ def logger(func):
 
 class Upd:
 
+    """ a container class for server response json-objects
+        with methods for information extraction"""
+
     def __init__(self, content):
         self.content = content['result'][0]
-        with open('./contents/' + str(self.content['update_id']) + '.json', 'w') as f:
+        if not os.path.exists('../contents'):
+            os.makedirs('../contents')
+        with open('../contents/' + str(self.content['update_id']) + '.json', 'w') as f:
             json.dump(self.content, f)
 
     def get_offset(self):
@@ -54,12 +60,16 @@ class Upd:
 
 class Bot:
 
+    """ allows interaction between functional modules and user, server"""
+
     base_url = 'https://api.telegram.org/bot'
 
+    @logger
     def __init__(self, token):
+        """ API-authorisation with a token"""
         self.token = token
         try:
-            with open('log.log', 'x') as f:
+            with open('../log.log', 'x') as f:
                 pass
         except FileExistsError:
             pass
@@ -79,7 +89,6 @@ class Bot:
             params['offset'] = offset
             print(params)
         upd = Upd(rq.get(self.assemble_url(method_name), params).json())
-        print(upd)
         return upd
 
     @logger
@@ -96,49 +105,3 @@ class Bot:
         method_name = 'getFile'
         params = {'file_id': file_id}
         file = rq.get(self.assemble_url(method_name), params)
-
-
-def main():
-
-    with open('token.token', 'r') as f:
-        token = f.read().strip('\n')
-
-    home_bot = Bot(token)
-    print(token)
-
-
-    offset = None
-
-    while True:
-        try:
-            last_upd = home_bot.get_last_update(offset)
-            if last_upd:
-                print("OK")
-                offset = last_upd.get_offset() + 1
-                msg_text = last_upd.get_text()
-
-                links = re.findall('http[s]?://\S*', msg_text)
-                print(links)
-                site_text = Scraper(links[0]).scrape()
-                print(site_text)
-                text_stats = Analyzer(site_text).get_stats()
-                print(text_stats)
-                response = ''
-                for key, value in text_stats.items():
-                    response += (key+': '+str(value)+'\n')
-
-                home_bot.send_text(chat_id=last_upd.get_chat_id(), text=response)
-
-                #if last_upd.get_file_id():
-                #    home_bot.get_file(last_upd.get_file_id())
-        except IndexError:
-            pass
-        except KeyboardInterrupt:
-            exit()
-
-
-if __name__ == '__main__':
-    try:
-        main()
-    except KeyboardInterrupt:
-        exit()
